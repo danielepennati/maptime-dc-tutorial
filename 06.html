@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Making a dashboard using d3.js, dc.js and crossfilter.js">
+    <meta name="author" content="">
+    <title>MampTime tutorial</title>
+    <!-- Bootstrap core CSS -->
+    <link href="css/bootstrap.css" rel="stylesheet">
+    <link href="css/dc.min.css" rel="stylesheet" />
+    <link href="css/style.css" rel="stylesheet" />
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+      <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+    <![endif]-->
+  </head>
+  <body id="dashboard">
+    <div class="container-fluid">
+      <div class="row title">
+        <div class="col-md-10">
+          <h2>Spostamenti pendolari tra comuni differenti per motivi di studio o lavoro - Istat Censimento 2011</h2>
+        </div>
+        <div class="col-md-2 dc-record-count text-right">
+          <span class="filter-count"></span> record selezionati di <span class="total-count"></span><br>
+          <a href="javascript:dc.filterAll(); dc.renderAll();">Reset All</a></small>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-3" id="dc-motivo-pie">
+          <h4>
+            Motivo dello spostamento <small><a class="reset" href="javascript:motivoPie.filterAll();dc.redrawAll();" style="display: none;">reset</a></small>
+          </h4>
+        </div>
+        <div class="col-md-3" id="dc-ora-row">
+          <h4>
+            Ora di partenza <small><a class="reset" href="javascript:oraRow.filterAll();dc.redrawAll();" style="display: none;">reset</a></small>
+          </h4>
+          <div class="chart"></div></div>
+        <div class="col-md-3" id="dc-tempo-row">
+          <h4>
+            Tempo impiegato <small><a class="reset" href="javascript:tempoRow.filterAll();dc.redrawAll();" style="display: none;">reset</a></small>
+          </h4>
+        </div>
+        <div class="col-md-3" id="dc-mezzo-bar">
+          <h4>
+            Mezzo di trasporto <small><a class="reset" href="javascript:mezzoBar.filterAll();dc.redrawAll();" style="display: none;">reset</a></small>
+          </h4>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-6" id="dc-map">mappa</div>
+        <div class="col-md-3" id="dc-provincia-out-row">
+          <h4>
+            Provincia di origine <small><a class="reset" href="javascript:provOriRow.filterAll();dc.redrawAll();" style="display: none;">reset</a></small>
+          </h4>
+        </div>
+        <div class="col-md-3" id="dc-provincia-in-row">
+          <h4>
+            Provincia di destinazione <small><a class="reset" href="javascript:provDesRow.filterAll();dc.redrawAll();" style="display: none;">reset</a></small>
+          </h4>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-12">tabella</div>
+      </div>
+    </div>
+
+    <script src="js/jquery.min.js" ></script>
+    <script src="js/d3.min.js"></script>
+    <script src="js/queue.v1.min.js"></script>
+    <script src="js/topojson.v1.min.js"></script>
+    <script src="js/crossfilter.min.js"></script>
+    <script src="js/dc.min.js"></script>
+    <script src="js/codiciIstat2011.js" ></script>
+
+    <script type="text/javascript">
+      //definiamo i grafici di dc
+      var motivoPie = dc.pieChart("#dc-motivo-pie");
+      var oraRow = dc.rowChart("#dc-ora-row");
+      var tempoRow = dc.rowChart("#dc-tempo-row");
+      var mezzoBar = dc.barChart("#dc-mezzo-bar");
+      var provOriRow = dc.rowChart("#dc-provincia-out-row");
+      var provDesRow = dc.rowChart("#dc-provincia-in-row");
+
+      //carichiamo le risorse necessarie
+      queue()
+          .defer(d3.json, "data/ita_com.json")
+          .defer(d3.csv, "data/pend2011.csv")
+          .await(ready);
+
+      function ready(error, base, data) {
+        if(error){
+          console.log(error);
+          return false;
+        }
+
+        var graficiSopraW = $("#dc-motivo-pie").width(),
+            graficiSopraH = $("#dc-motivo-pie").width() / 2,
+            mappaW = $("#dc-map").width(),
+            graficiSottoW = $('#dc-provincia-out-row').width();
+
+        //formattiamo i dati
+        // format our data
+        data.forEach(function(d) {   
+          d.provOri = +d.ori.substring(0, d.ori.length - 3);
+          d.provDes = +d.des.substring(0, d.des.length - 3);
+          d.des = +d.des;
+          d.ori = +d.ori;
+          d.mot = +d.mot;
+          d.ora = +d.ora;
+          d.t = +d.t;
+          d.mez = +d.mez;
+          d.n = +d.n;
+        });
+
+        // carichiamo i dati in crossfilter
+        var cf = crossfilter(data);
+
+        // contiamo il totale dei record
+        var totale = cf.groupAll();
+
+        //creiamo il "grafico" che restituisce il totale
+        dc.dataCount(".dc-record-count")
+          .dimension(cf)
+          .group(totale);
+
+        /* 
+         *
+         * GRAFICO MOTIVO SPOSTAMENTO
+         *
+         */
+        //Creo dimensione motivo
+        var motDimension = cf.dimension( function (d) {
+          switch (d.mot) {
+            case 1:
+              return "1.Studio";
+            case 2:
+              return "2.Lavoro";
+          }
+        });
+        //Gruppo motivo con somma del numero di pendolari
+        var motGroup = motDimension.group().reduceSum(function(d) { return d.n; });
+
+        // Grafico Motivo
+        motivoPie.width( graficiSopraW )
+          .height( graficiSopraH )
+          .radius( graficiSopraH / 2 )
+          .innerRadius( graficiSopraH / 4 )
+          .dimension( motDimension )
+          .group( motGroup )
+          .label(function (d){
+             return d.key.split(".")[1];
+          })
+          .colors( d3.scale.category10() )
+          .title( function(d){return d.value;} );
+
+        /* 
+         *
+         * GRAFICO ORA PARTENZA
+         *
+         */
+        //Creo dimensione ora
+        var oraDimension = cf.dimension( function (d) {
+          switch (d.ora) {
+            case 1:
+              return "1.prima delle 7,15";
+            case 2:
+              return "2.dalle 7,15 alle 8,14";
+            case 3:
+              return "3.dalle 8,15 alle 9,14";
+            case 4:
+              return "4.dopo le 9,14";
+          }
+        });
+        //Gruppo ora con somma del numero di pendolari
+        var oraGroup = oraDimension.group().reduceSum(function(d) { return d.n; });
+        // Grafico Mezzo
+        oraRow.width( graficiSopraW )
+          .height( graficiSopraH )
+          .margins( {top: 5, left: 10, right: 10, bottom: 20} )
+          .dimension( oraDimension )
+          .group( oraGroup )
+          .colors( d3.scale.category10() )
+          .label( function (d){ return d.key.split(".")[1]; } )
+          .labelOffsetY( 20 )
+          .title( function(d){return d.value + " pendolari";} )
+          .elasticX( true )
+          .xAxis()
+          .ticks(4);
+
+        /* 
+         *
+         * GRAFICO TEMPO DI VIAGGIO
+         *
+         */
+        //Creo dimensione tempo
+        var tempoDimension = cf.dimension( function (d) { 
+          switch (d.t) {
+            case 1:
+              return "1.Fino a 15 minuti";
+            case 2:
+              return "2.Da 16 a 30 minuti";
+            case 3:
+              return "3.Da 31 a 60 minuti";
+            case 4:
+              return "4.Oltre 60 minuti";
+          }
+        });
+        //Gruppo tempo con somma del numero di pendolari
+        var tempoGroup = tempoDimension.group().reduceSum(function(d) { return d.n; });
+        // Grafico Tempo
+        tempoRow.width( graficiSopraW )
+          .height( graficiSopraH )
+          .margins( {top: 5, left: 10, right: 10, bottom: 20} )
+          .dimension( tempoDimension )
+          .group( tempoGroup )
+          .colors( d3.scale.category10() )
+          .label( function (d){ return d.key.split(".")[1]; } )
+          .labelOffsetY( 20 )
+          .title( function(d){return d.value + " pendolari";} )
+          .elasticX( true )
+          .xAxis()
+          .ticks(4);
+
+
+        /* 
+         *
+         * GRAFICO MEZZO DI TRASPORTO
+         *
+         */
+        //Creo dimensione mezzo
+        var mezDimension = cf.dimension( function (d) {
+          switch (d.mez) {
+            case 1:
+              return "1.Treno";
+            case 2:
+            case 3:
+            case 4:
+              return "2.Trasporto pubblico urbano";
+            case 5:
+            case 6:
+              return "3.Autobus extra-urbano";
+            case 7:
+            case 8:
+            case 9:
+              return "4.Auto/moto privata";
+            case 10:
+            case 11:
+            case 12:
+              return "5.Bicicletta, a piedi, altro mezzo";
+          }
+        });
+        //Gruppo mezzo con somma del numero di pendolari
+        var mezGroup = mezDimension.group().reduceSum(function(d) { return d.n; });
+
+        // Grafico Motivo
+        mezzoBar.width( graficiSopraW )
+          .height( graficiSopraH )
+          .dimension( mezDimension )
+          .group( mezGroup ).margins({top: 10, right: 10, bottom: 20, left: 60})
+          .transitionDuration(500)
+          .centerBar(false)
+          .title(function(d){ return d.key.split(".")[1] + ': ' + d.value })
+          .x(d3.scale.ordinal())
+          .xUnits(dc.units.ordinal)
+          .elasticY(true)
+          .xAxis().tickValues([]);
+
+        /* 
+         *
+         * GRAFICO PROVINCIA ORIGINE
+         *
+         */
+        //Creo dimensione provincia di provenienza
+        var provOriDimension = cf.dimension(function (d) { return d.provOri; });
+        //Gruppo pendolari in uscita dalla provincia
+        var provOriGroup = provOriDimension.group().reduceSum(function(d) { return d.n; });
+        //grafico provincia di origine
+        provOriRow.width( graficiSottoW )
+          .height( mappaW )
+          .margins( {top: 5, left: 10, right: 10, bottom: 20} )
+          .dimension( provOriDimension )
+          .group( provOriGroup )
+          .colors( ['#666666'] )
+          .gap( 2 )
+          //.label( function (d){ return d.key; } )
+          .renderLabel( false )
+          .title( function(d){return codProvince[d.key] + ': ' + d.value + " pendolari";} )
+          .elasticX( true )
+          .xAxis()
+          .ticks(4);
+        /* 
+         *
+         * GRAFICO PROVINCIA DESTINAZIONE
+         *
+         */
+        //Creo dimensione provincia di destinazione
+        var provDesDimension = cf.dimension(function (d) { return d.provDes; });
+        //Gruppo pendolari in ingresso nella provincia
+        var provDesGroup = provDesDimension.group().reduceSum(function(d) { return d.n; });
+        //grafico provincia destinazione
+        provDesRow.width( graficiSottoW )
+          .height( mappaW )
+          .margins( {top: 5, left: 10, right: 10, bottom: 20} )
+          .dimension( provDesDimension )
+          .group( provDesGroup )
+          .colors( ['#666666'] )
+          .gap( 2 )
+          //.label( function (d){ return d.key; } )
+          .renderLabel( false )
+          .title( function(d){return codProvince[d.key] + ': ' + d.value + " pendolari";} )
+          .elasticX( true )
+          .xAxis()
+          .ticks(4);
+        // Disegnamo tutti i grafici
+        dc.renderAll();
+
+      }
+    </script>
+ </body>
+</html>

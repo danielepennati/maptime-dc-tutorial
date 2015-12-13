@@ -1,0 +1,29 @@
+ori => PROCOM comune di residenza
+mot => Motivo spostamento 
+		1 studio
+		2 lavoro
+des => PROCOM comune di destinazione
+mez => Mezzo di trasporto
+		1 treno;
+		2 tram;
+		3 metropolitana;
+		4 autobus urbano, filobus;
+		5 corriera, autobus extra-urbano;
+		6 autobus aziendale o scolastico;
+		7 auto privata (come conducente);
+		8 auto privata (come passeggero);
+		9 motocicletta,ciclomotore,scooter;
+		10 bicicletta;
+		11 altro mezzo;
+		12 a piedi; 
+ora => Orario di uscita
+		1 prima delle 7,15;
+		2 dalle 7,15 alle 8,14;
+		3 dalle 8,15 alle 9,14;
+		4 dopo le 9,14;
+t => tempo di viaggio
+		1 fino a 15 minuti;
+		2 da 16 a 30 minuti;
+		3 da 31 a 60 minuti;
+		4 oltre 60 minuti;
+n => Stima numero di individui

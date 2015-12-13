@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Making a dashboard using d3.js, dc.js and crossfilter.js">
+    <meta name="author" content="">
+    <title>MampTime tutorial</title>
+    <!-- Bootstrap core CSS -->
+    <link href="css/bootstrap.css" rel="stylesheet">
+    <link href="css/dc.min.css" rel="stylesheet" />
+    <link href="css/style.css" rel="stylesheet" />
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+      <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+    <![endif]-->
+  </head>
+  <body id="dashboard">
+    <div class="container-fluid">
+      <div class="row title">
+        <div class="col-md-10">
+          <h2>Spostamenti pendolari tra comuni differenti per motivi di studio o lavoro - Istat Censimento 2011</h2>
+        </div>
+        <div class="col-md-2 dc-record-count text-right">
+          <span class="filter-count"></span> record selezionati di <span class="total-count"></span><br>
+          <a href="javascript:dc.filterAll(); dc.renderAll();">Reset All</a></small>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-3" id="dc-motivo-pie">
+          <h4>
+            Motivo dello spostamento <small><a class="reset" href="javascript:motivoPie.filterAll();dc.redrawAll();" style="display: none;">reset</a></small>
+          </h4>
+        </div>
+        <div class="col-md-3">ora</div>
+        <div class="col-md-3">tempo</div>
+        <div class="col-md-3">mezzo</div>
+      </div>
+      <div class="row">
+        <div class="col-md-6">mappa</div>
+        <div class="col-md-3">provincia out</div>
+        <div class="col-md-3">provincia in</div>
+      </div>
+      <div class="row">
+        <div class="col-md-12">tabella</div>
+      </div>
+    </div>
+
+    <script src="js/jquery.min.js" ></script>
+    <script src="js/d3.min.js"></script>
+    <script src="js/queue.v1.min.js"></script>
+    <script src="js/topojson.v1.min.js"></script>
+    <script src="js/crossfilter.min.js"></script>
+    <script src="js/dc.min.js"></script>
+    <script src="js/codiciIstat2011.js" ></script>
+
+    <script type="text/javascript">
+
+      //definiamo i grafici di dc
+      var motivoPie = dc.pieChart("#dc-motivo-pie");
+
+      //carichiamo le risorse necessarie
+      queue()
+          .defer(d3.json, "data/ita_com.json")
+          .defer(d3.csv, "data/pend2011.csv")
+          .await(ready);
+
+      function ready(error, base, data) {
+        if(error){
+          console.log(error);
+          return false;
+        }
+
+        var graficiSopraW = $("#dc-motivo-pie").width(),
+            graficiSopraH = $("#dc-motivo-pie").width() / 2;
+
+        //formattiamo i dati
+        // format our data
+        data.forEach(function(d) {   
+          d.provOri = +d.ori.substring(0, d.ori.length - 3);
+          d.provDes = +d.des.substring(0, d.des.length - 3);
+          d.des = +d.des;
+          d.ori = +d.ori;
+          d.mot = +d.mot;
+          d.ora = +d.ora;
+          d.t = +d.t;
+          d.mez = +d.mez;
+          d.n = +d.n;
+        });
+
+        // carichiamo i dati in crossfilter
+        var cf = crossfilter(data);
+
+        // contiamo il totale dei record
+        var totale = cf.groupAll();
+
+        //creiamo il "grafico" che restituisce il totale
+        dc.dataCount(".dc-record-count")
+          .dimension(cf)
+          .group(totale);
+
+        /* 
+         *
+         * GRAFICO MOTIVO SPOSTAMENTO
+         *
+         */
+        //Creo dimensione motivo
+        var motDimension = cf.dimension( function (d) {
+          switch (d.mot) {
+            case 1:
+              return "1.Studio";
+            case 2:
+              return "2.Lavoro";
+          }
+        });
+        //Gruppo motivo con somma del numero di pendolari
+        var motGroup = motDimension.group().reduceSum(function(d) { return d.n; });
+
+        // Grafico Motivo        
+        motivoPie.width( graficiSopraW )
+          .height( graficiSopraH )
+          .radius( graficiSopraH / 2 )
+          .innerRadius( graficiSopraH / 4 )
+          .dimension( motDimension )
+          .group( motGroup )
+          .label(function (d){
+             return d.key.split(".")[1];
+          })
+          .colors( d3.scale.category10() )
+          .title( function(d){return d.value;} );
+
+        // Disegnamo tutti i grafici
+        dc.renderAll();
+
+      }
+    </script>
+ </body>
+</html>
